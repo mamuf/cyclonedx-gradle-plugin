@@ -55,6 +55,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Properties;
@@ -127,6 +128,7 @@ public class CycloneDxTask extends DefaultTask {
                 .stream()
                 .map(p -> p.getGroup() + ":" + p.getName() + ":" + p.getVersion())
                 .collect(Collectors.toSet());
+        final Set<String> processedDependencies = new HashSet<>();
 
         final Metadata metadata = createMetadata();
         final Set<Component> components = new LinkedHashSet<>();
@@ -139,17 +141,23 @@ public class CycloneDxTask extends DefaultTask {
                         for (final ResolvedArtifact artifact : resolvedConfiguration.getResolvedArtifacts()) {
                             // Don't include other resources built from this Gradle project.
                             final String dependencyName = getDependencyName(artifact);
-                            if(builtDependencies.stream().anyMatch(c -> c.equals(dependencyName))) {
+                            if (builtDependencies.contains(dependencyName)) {
                                 continue;
                             }
-
+                            // Note dependency to be logged as part of this configuration
                             depsFromConfig.add(dependencyName);
+                            // Skip already processed dependency (e.g. from a previous subproject)
+                            if (processedDependencies.contains(dependencyName)) {
+                                continue;
+                            }
 
                             // Convert into a Component and augment with pom metadata if available.
                             final Component component = convertArtifact(artifact);
                             augmentComponentMetadata(component, dependencyName);
                             components.add(component);
                         }
+                        processedDependencies.addAll(depsFromConfig);
+
                         Collections.sort(depsFromConfig);
                         getLogger().info("BOM inclusion for configuration {} : {}", configuration.getName(), depsFromConfig);
                     }
